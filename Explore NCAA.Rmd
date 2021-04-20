@@ -1,0 +1,333 @@
+---
+title: "Introduction to ncaahoopR"
+author: "Jacob Lowell"
+date: "4/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE , message = FALSE , warning =  FALSE)
+#
+library(tidyverse)
+options(digits=3)
+
+```
+
+Exploring a little NCAA basketball data
+
+# Section 1
+
+## Generate data
+
+```{r}
+#devtools::install_github("lbenz730/ncaahoopR")
+```
+
+
+```{r}
+library(ncaahoopR)
+```
+
+
+
+
+
+##  Pull Maine's 2019-2020 play by play data
+```{r}
+
+# play by play for 2019-2020
+maine <- get_pbp(team = "Maine"  , season = "2020-21")
+
+
+dayton  <- get_pbp(team = "Dayton"  , season = "2019-20")
+plot_missing(dayton)
+
+
+Virginia  <- get_pbp(team = "UVA"  , season = "2019-20")
+plot_missing(Virginia)
+
+# team roster for 2019-2020
+maine_roster <- get_roster("Maine" ,  season = "2019-20")
+
+# get game ids
+
+maine_game_id_2019_20 <- get_game_ids("Maine" ,  season = "2019-20")
+  
+
+get_p
+#get schedule
+  
+maine_schedule_2019_20 <- get_schedule( team = "Maine" ,  season = "2019-20")
+
+#Team dictionary
+dict <- dict
+#Team colors
+ncaa_colors <- ncaa_colors
+
+
+```
+
+
+
+```{r}
+games_pbp <- maine %>%  nest(data = c(-date))
+
+maine %>%  filter(date == "2020-02-05") %>% filter( str_detect(description , "Schildroth"))
+
+games_pbp[[2]][[1]] %>% filter( str_detect(description , "Schildroth"))
+```
+
+
+```{r}
+Schildroth_plays  <- maine %>% filter( str_detect(description , "Schildroth"))
+
+
+
+```
+
+
+
+## Run dataexplorer on play by play
+
+```{r}
+library(DataExplorer)
+
+plot_str(maine)
+
+
+```
+
+
+
+```{r}
+library(gt)
+introduce(maine) %>%pivot_longer( cols = everything() ,names_to = "Field"  , values_to = "Count")  # %>%  gt()
+
+plot_intro(maine)
+
+```
+
+
+
+```{r}
+plot_missing(maine) + labs(title = "It looks like data is decent except Maine games are missing shot location data"  ,
+                           subtitle = "Point Spread missing for 4.26% ganes" , caption = "Source: ncaascrapR")
+```
+
+
+```{r}
+plot_bar(maine)
+```
+
+
+
+```{r}
+plot_histogram(maine  , by = "away")
+
+args(plot_histogram)
+
+
+qq_data <- maine %>% select(win_prob , naive_win_prob , home_favored_by, score_diff , home) %>% 
+  mutate(Maine = case_when(home == "Maine" ~ "Maine" , TRUE ~ "Other"   ))
+
+library(plotly)
+
+g <- plot_qq(qq_data , by = "Maine") 
+
+g
+
+
+plot_correlation(qq_data)
+
+
+plot_boxplot(qq_data , by = "Maine")
+
+plot_scatterplot(qq_data , by = "Maine")
+
+```
+
+
+## Dealing with lists
+
+
+
+
+
+
+
+
+################################################################################
+
+##  Try to create function to pull all boxscores for team
+
+
+```{r , pull_all_boxscores}
+
+# come back to this.  look at examples where functions return multiple results
+
+
+# get game ids
+
+
+boxscores_season  = function(Team =  "Maine"  , Season =  "2019-20") {  
+
+maine_game_id_2019_20 <- get_game_ids(team = Team ,  season = Season)
+
+maine_boxscores_2019_20  <- map(maine_game_id_2019_20 , get_boxscore)
+
+# function to pull boxscore from each game of the season and make a data frame
+
+####
+for (i in seq_along(maine_boxscores_2019_20)) {
+  if  (i  == 1)  {   
+  one <- maine_boxscores_2019_20[[i]][[1]] %>% bind_rows(maine_boxscores_2019_20[[i]][[2]]) %>% 
+    mutate(Game = i)
+
+  }
+ else { one <- one %>% bind_rows(  maine_boxscores_2019_20[[i]][[1]]  %>%   mutate(Game = i)) %>% 
+   bind_rows(maine_boxscores_2019_20[[i]][[2]]  %>%   mutate(Game = i))
+ }
+ 
+}
+one
+}
+########
+library(tidyverse)
+library(broom)
+
+scores <- boxscores_season()
+
+Schildroth_Boxscores <- scores %>% filter( str_detect( player , "Schildroth"))
+
+Tayor_Summary <- Schildroth_Boxscores %>% select_if(is.numeric   )   %>%    map_df(sum)
+
+
+
+
+team_box_summary <-
+  scores   %>%  select(player ,  which  (map_lgl(. , is.numeric))) %>% 
+  group_by(player) %>% summarise(MIN = sum(MIN) , FGM = sum(FGM) , BLK = sum(BLK) , PTS = sum(PTS) ,
+                                 sum(FGM)/ sum(FGA) , PPG = sum(PTS)/n() ,  Games = n()) %>% 
+  ungroup()
+
+
+
+
+
+
+##########
+add_na_col <- function(x){
+  mutate(x, na = 0)
+}
+
+has_n_col <- function(x, n = 6){
+  return(ncol(x) == n)
+}
+
+
+
+scores %>%
+select(player ,  which  (map_lgl(. ,is.numeric)) ) %>%
+  map(~tidy(summary(.x))) %>%  # compute tidy summary of each var
+  map_if(., has_n_col, add_na_col) %>%   # add na-col if missing
+  do.call(rbind, .) -> team_box_summary  # bind list elements into df
+#########
+```
+
+
+
+
+###  try vermonth
+
+
+```{r  vermont}
+
+
+boxscores_season  = function(Team =  "Vermont"  , Season =  "2019-20") {  
+
+maine_game_id_2019_20 <- get_game_ids(team = Team ,  season = Season)
+
+maine_boxscores_2019_20  <- map(maine_game_id_2019_20 , get_boxscore )
+
+one <- get_boxscore("401170104")
+
+
+# function to pull boxscore from each game of the season and make a data frame
+
+####
+for (i in seq_along(maine_boxscores_2019_20)) {
+  if  (i  == 1)  {   
+  one <- maine_boxscores_2019_20[[i]][[1]] %>% bind_rows(maine_boxscores_2019_20[[i]][[2]]) %>% 
+    mutate(Game = i)
+
+  }
+ else { one <- one %>% bind_rows(  maine_boxscores_2019_20[[i]][[1]]  %>%   mutate(Game = i)) %>% 
+   bind_rows(maine_boxscores_2019_20[[i]][[2]]  %>%   mutate(Game = i))
+ }
+ 
+}
+one
+}
+########
+library(tidyverse)
+library(broom)
+
+scores <- boxscores_season()
+
+```
+
+
+
+
+##############################################################################
+
+
+
+
+
+
+
+```{r}
+plot_str(maine_boxscores_2019_20)
+
+
+dog  <- maine_boxscores_2019_20[[2]][[2]]
+
+
+
+
+```
+
+
+## Chart Examples from source
+
+
+```{r}
+gg_wp_chart(game_id = 401082978, home_col = "gray", away_col = "orange")
+```
+
+
+```{r}
+ game_flow(game_id = 401082669, home_col = "blue", away_col = "navy")
+```
+
+
+```{r}
+wp_chart(game_id = 401025888, home_col = "navy", away_col = "goldenrod1")
+
+exitement <- 
+
+game_excitement_index(401025888, include_spread = TRUE)
+
+```
+
+
+```{r}
+game_shot_chart(game_id = 401083557, heatmap = T)
+```
+
+
+```{r}
+game_shot_chart(game_id = 401083557)
+```
+
